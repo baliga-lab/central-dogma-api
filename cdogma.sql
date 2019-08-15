@@ -24,12 +24,15 @@ DROP TABLE IF EXISTS `game_sessions`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `game_sessions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) NOT NULL,
-  `duration` int(11) NOT NULL DEFAULT '48',
+  `code` varchar(100) NOT NULL,
   `start_time` timestamp NOT NULL,
-  `uuid` varchar(256) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
+  `owner_id` int(11) NOT NULL,
+  `end_time` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_code` (`code`),
+  KEY `fk_sess_owner` (`owner_id`),
+  CONSTRAINT `fk_sess_owner` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -38,8 +41,70 @@ CREATE TABLE `game_sessions` (
 
 LOCK TABLES `game_sessions` WRITE;
 /*!40000 ALTER TABLE `game_sessions` DISABLE KEYS */;
-INSERT INTO `game_sessions` VALUES (1,'test1',200,'2019-08-02 19:52:54','s12345');
+INSERT INTO `game_sessions` VALUES (2,'session1','2019-08-15 22:00:00',1,'2019-08-22 20:00:00');
 /*!40000 ALTER TABLE `game_sessions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `user_game_log`
+--
+
+DROP TABLE IF EXISTS `user_game_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `user_game_log` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `session_id` int(11) DEFAULT NULL,
+  `level_id` varchar(100) NOT NULL,
+  `score` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_gl_user` (`user_id`),
+  KEY `fk_gl_session` (`session_id`),
+  CONSTRAINT `fk_gl_session` FOREIGN KEY (`session_id`) REFERENCES `game_sessions` (`id`),
+  CONSTRAINT `fk_gl_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `user_game_log`
+--
+
+LOCK TABLES `user_game_log` WRITE;
+/*!40000 ALTER TABLE `user_game_log` DISABLE KEYS */;
+INSERT INTO `user_game_log` VALUES (2,1,NULL,'level1',12345),(3,1,NULL,'level1',12345),(4,1,2,'level1',12345);
+/*!40000 ALTER TABLE `user_game_log` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `user_question_log`
+--
+
+DROP TABLE IF EXISTS `user_question_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `user_question_log` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `answer_option` varchar(10) NOT NULL,
+  `correctness` int(11) NOT NULL,
+  `session_id` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_uql_user` (`user_id`),
+  KEY `fk_uql_session` (`session_id`),
+  CONSTRAINT `fk_uql_session` FOREIGN KEY (`session_id`) REFERENCES `game_sessions` (`id`),
+  CONSTRAINT `fk_uql_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `user_question_log`
+--
+
+LOCK TABLES `user_question_log` WRITE;
+/*!40000 ALTER TABLE `user_question_log` DISABLE KEYS */;
+INSERT INTO `user_question_log` VALUES (1,1,'option1',1,2);
+/*!40000 ALTER TABLE `user_question_log` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -51,16 +116,14 @@ DROP TABLE IF EXISTS `users`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `users` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `game_session_id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `grade` int(11) DEFAULT NULL,
   `gender` char(1) DEFAULT NULL,
-  `levels_played` int(11) DEFAULT NULL,
-  `hours_played` int(11) DEFAULT NULL,
-  `correct_answers` int(11) DEFAULT NULL,
-  `wrong_answers` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+  `hash` varchar(512) NOT NULL,
+  `salt` varchar(100) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_uname` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -69,6 +132,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
+INSERT INTO `users` VALUES (1,'user',6,'m','$argon2id$v=19$m=102400,t=2,p=8$1gJcj+O0KVRna9ERS6nFHA$hr8n/jX+4suouipyCAzoaA','6oQSBt2KOJJkpmGMqILGM0J3BR+WG1iggdBzjN32Pgo=');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -81,4 +145,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2019-08-02 13:31:21
+-- Dump completed on 2019-08-15 13:06:28
