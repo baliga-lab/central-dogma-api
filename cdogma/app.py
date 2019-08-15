@@ -14,6 +14,8 @@ from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 
 import requests
+import users
+import traceback
 
 app = Flask(__name__)
 CORS(app)
@@ -47,8 +49,32 @@ def register_user():
   """passing in the username, password, grade, gender.
   make a user and gives a session token that all other endpoints can use"""
   payload = request.get_json()
-  access_token = create_access_token(identity='mockuser')
-  return jsonify(access_token=access_token)
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    username = payload['username']
+    password = payload['password']
+    grade = payload['grade']
+    gender = payload['gender']
+    cur.execute('select count(*) from users where name=%s', [username])
+    if cur.fetchone()[0] > 0:
+      return jsonify(status="error", error="user name already exists")
+
+    salt, hashval = users.make_password(password)
+
+    cur.execute('insert into users (name,grade,gender,hash,salt) values (%s,%s,%s,%s,%s)',
+                [username, grade, gender, hashval, salt])
+    conn.commit()
+    access_token = create_access_token(identity='mockuser')
+    return jsonify(status="ok", access_token=access_token)
+  except Exception as e:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    # It looks like we can not close cur automatically in a "with" statement using
+    # MySQLDb and Python2
+    if cur is not None:
+      cur.close()
 
 
 @app.route('/user/login', methods=["POST"])
@@ -57,18 +83,30 @@ def login_user():
   login the user and returns a session token that all other endpoints can use"""
   payload = request.get_json()
   try:
-    access_token = create_access_token(identity=payload['username'])
-    return jsonify(access_token=access_token)
+    username = payload['username']
+    password = payload['password']
   except:
-    return jsonify(error="Please provide a user name and password")
+    return jsonify(status="error", error="Please provide a user name and password")
 
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    cur.execute('select hash, salt from users where name=%s', [username])
+    row = cur.fetchone()
+    if row is not None:
+      hashval, salt = row
+      if users.verify_password(password, salt, hashval):
+        access_token = create_access_token(identity=payload['username'])
+        return jsonify(status="ok", access_token=access_token)
+      else:
+        return jsonify(status="error", error="invalid password")
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
 
-@app.route('/user/testjwt', methods=["POST"])
-@jwt_required
-def test_jwt():
-  """just a demonstration"""
-  current_user = get_jwt_identity()
-  return jsonify(logged_in_as=current_user)
 
 """
 Session functions
@@ -158,31 +196,6 @@ def get_session_leaderboard(session_id):
   ]
   return jsonify(entries=leaders)
 
-"""
-@app.route('/submit_info/<session_id>', methods=["POST"])
-def submit_info(session_id):
-    conn = dbconn()
-    cur = None
-    try:
-        cur = conn.cursor()
-        cur.execute('select id, name from game_sessions where uuid=%s', [session_id])
-        row = cur.fetchone()
-        if row is not None:
-          print('valid session')
-          sess_id, sess_name = row
-          # TODO: add entry
-          payload = request.get_json()
-          print(payload)
-        else:
-          print('session not found')
-    except:
-        traceback.print_exc()
-    finally:
-      if cur is not None:
-        cur.close()
-
-    return jsonify(status="ok")
-"""
 
 if __name__ == '__main__':
     app.debug = True
