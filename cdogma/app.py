@@ -13,6 +13,7 @@ from flask_cors import CORS, cross_origin
 
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 
+import datetime
 import requests
 import users
 import traceback
@@ -111,34 +112,46 @@ def login_user():
 """
 Session functions
 """
-
-@app.route('/session/<code>', methods=["GET"])
-@jwt_required
-def session_info(code):
-  """passing in the session code
-  returns the session information (start and end dates)"""
-  current_user = get_jwt_identity()
-  print(current_user)
-  return jsonify(start_time="2019-08-13 08:00:00", end_time="2019-08-30 23:59:59")
-
-
-@app.route('/session/<code>', methods=["PATCH"])
-@jwt_required
-def modify_session_info(code):
-  """passing in the session code, start, and end
-  modify session start and end times"""
-  print("modify_session_info")
-  return jsonify(status="ok")
-
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 @app.route('/session', methods=["POST"])
 @jwt_required
 def make_session():
   """
-  - passing in the session code, start, and end
+  - passing in the session code, start and end
   - ensures that the code does not exist before creating a session with those info
   """
+  payload = request.get_json()
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    session_code = payload['session_code']
+    start_time_str = payload['start_time']
+    end_time_str = payload['end_time']
+
+    start_time = datetime.datetime.strptime(start_time_str, DATE_FORMAT)
+    end_time = datetime.datetime.strptime(end_time_str, DATE_FORMAT)
+    cur.execute('select count(*) from game_sessions where code=%s', [session_code])
+    if cur.fetchone()[0] > 0:
+      return jsonify(status="error", error="a session with code '%s' already exists" % session_code)
+    else:
+      current_user = get_jwt_identity()
+      cur.execute('select id from users where name=%s', [current_user])
+      user_id = cur.fetchone()[0]
+      cur.execute('insert into game_sessions (code,start_time,end_time,owner_id) values (%s,%s,%s,%s)',
+                  [session_code, start_time, end_time, user_id])
+      conn.commit()
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
   return jsonify(status="ok")
+
+def format_time(time_obj):
+  return str(time_obj)
 
 
 @app.route('/session', methods=["GET"])
@@ -147,18 +160,75 @@ def owned_sessions():
   """
   gets the list of sessions that they "own" and can modify
   """
-  return jsonify(sessions=[])
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    current_user = get_jwt_identity()
+    cur.execute('select code,start_time,end_time from game_sessions gs join users u on gs.owner_id=u.id where u.name=%s', [current_user])
+    sessions = [{"session_code": code, "start_time": format_time(start_time),
+                 "end_time": format_time(end_time)}
+                for code, start_time, end_time in cur.fetchall()]
+    return jsonify(status="ok", sessions=sessions)
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
+
+@app.route('/session/<code>', methods=["GET"])
+@jwt_required
+def session_info(code):
+  """passing in the session code
+  returns the session information (start and end dates)"""
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    cur.execute("select start_time, end_time from game_sessions where code=%s", [code])
+    start_time, end_time = cur.fetchone()
+    return jsonify(status="ok", session_info={"session_code": code,
+                                              "start_time": format_time(start_time),
+                                              "end_time": format_time(end_time)})
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
+
+@app.route('/session/<code>', methods=["PATCH"])
+@jwt_required
+def modify_session_info(code):
+  """passing in the session code, start, and end
+  modify session start and end times"""
+  payload = request.get_json()
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    start_time_str = payload['start_time']
+    end_time_str = payload['end_time']
+    start_time = datetime.datetime.strptime(start_time_str, DATE_FORMAT)
+    end_time = datetime.datetime.strptime(end_time_str, DATE_FORMAT)
+
+    cur.execute('select count(*) from game_sessions where code=%s', [code])
+    if cur.fetchone()[0] == 0:
+      return jsonify(status="error", error="session '%s' does not exist" % code)
+    cur.execute('update game_sessions set start_time=%s, end_time=%s where code=%s',
+                [start_time, end_time, code])
+    conn.commit()
+    return jsonify(status="ok")
+  except:
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
 
 """
 Game functions
 """
-
-@app.route('/game', methods=["GET"])
-@jwt_required
-def completed_games():
-  """lists all the games/levels the user has completed"""
-  return jsonify()
-
 
 @app.route('/game/<level_id>', methods=["POST"])
 @jwt_required
@@ -174,6 +244,14 @@ def log_question_response(level_id):
   """passing in the question id, answer option, correctness, and session id
   logs down the flashcard question answered and whether it is correct or not"""
   return jsonify()
+
+
+@app.route('/game', methods=["GET"])
+@jwt_required
+def completed_games():
+  """lists all the games/levels the user has completed"""
+  return jsonify()
+
 
 """
 Leaderboard functions
