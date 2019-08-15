@@ -235,22 +235,85 @@ Game functions
 def log_level_completion(level_id):
   """passing in the level id, the score, and optional session id
   submit the level complete and log down the level scores and stuff"""
-  return jsonify()
+  payload = request.get_json()
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    score = payload['score']
+    try:
+      session_code = payload['session_code']
+      cur.execute('select id from game_sessions where code=%s', [session_code])
+      session_id = cur.fetchone()[0]
+    except:
+      session_id = None
+    current_user = get_jwt_identity()
+    cur.execute('select id from users where name=%s', [current_user])
+    user_id = cur.fetchone()[0]
+    if session_id is None:
+      cur.execute('insert into user_game_log (user_id,level_id,score) values (%s,%s,%s)',
+                  [user_id, level_id, score])
+    else:
+      cur.execute('insert into user_game_log (user_id,level_id,score,session_id) values (%s,%s,%s,%s)',
+                  [user_id, level_id, score, session_id])
+    conn.commit()
+    return jsonify(status="ok")
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
 
 
 @app.route('/response/<question_id>', methods=["POST"])
 @jwt_required
-def log_question_response(level_id):
+def log_question_response(question_id):
   """passing in the question id, answer option, correctness, and session id
   logs down the flashcard question answered and whether it is correct or not"""
-  return jsonify()
+  payload = request.get_json()
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    answer_option = payload['answer_option']
+    correctness = payload['correctness']
+    session_code = payload['session_code']
+
+    current_user = get_jwt_identity()
+    cur.execute('select id from users where name=%s', [current_user])
+    user_id = cur.fetchone()[0]
+    cur.execute('select id from game_sessions where code=%s', [session_code])
+    session_id = cur.fetchone()[0]
+
+    cur.execute('insert into user_question_log (user_id,answer_option,correctness,session_id) values (%s,%s,%s,%s)',
+                [user_id, answer_option, correctness, session_id])
+    conn.commit()
+
+    return jsonify(status="ok")
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
 
 
 @app.route('/game', methods=["GET"])
 @jwt_required
-def completed_games():
+def game_completion():
   """lists all the games/levels the user has completed"""
-  return jsonify()
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    current_user = get_jwt_identity()
+    cur.execute('select s.code,level_id,score from user_game_log ugl join users u on ugl.user_id=u.id left outer join game_sessions s on ugl.session_id=s.id where u.name=%s',
+                [current_user])
+    entries = [{'session_code': '' if session_code is None else session_code,
+                'level_id': level_id,
+                'score': score} for session_code, level_id, score in cur.fetchall()]
+    return jsonify(status="ok", entries=entries)
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
 
 
 """
@@ -259,20 +322,34 @@ Leaderboard functions
 
 @app.route('/leaderboard', methods=["GET"])
 def get_all_time_leaderboard():
-  leaders = [
-    {'username': 'xyz', 'score': 12345},
-    {'username': 'abc', 'score': 12122}
-  ]
-  return jsonify(entries=leaders)
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    cur.execute('select u.name,ugl.score from user_game_log ugl join users u on ugl.user_id=u.id order by ugl.score desc')
+    leaders = [{'username': username, 'score': score} for username, score in cur.fetchall()]
+    return jsonify(status='ok', entries=leaders)
+  except:
+    traceback.print_exc()
+    return jsonify(statu='error', error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
 
 
 @app.route('/leaderboard/<session_id>', methods=["GET"])
 def get_session_leaderboard(session_id):
-  leaders = [
-    {'username': 'xyz', 'score': 12345},
-    {'username': 'abc', 'score': 12122}
-  ]
-  return jsonify(entries=leaders)
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    cur.execute('select u.name,ugl.score from user_game_log ugl join users u on ugl.user_id=u.id join game_sessions s on ugl.session_id=s.id where s.code=%s order by ugl.score desc', [session_id])
+    leaders = [{'username': username, 'score': score} for username, score in cur.fetchall()]
+    return jsonify(status='ok', entries=leaders)
+  except:
+    traceback.print_exc()
+    return jsonify(statu='error', error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
 
 
 if __name__ == '__main__':
