@@ -265,6 +265,46 @@ def log_level_completion(level_id):
       cur.close()
 
 
+@app.route('/game_rt/<level_id>', methods=["POST"])
+def log_level_completion_retreat(level_id):
+  """passing in the level id, the score, and optional session id
+  submit the level complete and log down the level scores and stuff
+  This does not require login and was only created for the ISB retreat
+  """
+  payload = request.get_json()
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    current_user = payload['user']
+    score = payload['score']
+    accuracy = payload['accuracy']
+    try:
+      session_code = payload['session_code']
+      cur.execute('select id from game_sessions where code=%s', [session_code])
+      session_id = cur.fetchone()[0]
+    except:
+      session_id = None
+    cur.execute('select id from users where name=%s', [current_user])
+    row = cur.fetchone()
+    if row is None:
+      cur.execute('insert into users (name) values (%s)', [current_user] )
+      user_id = cur.lastrowid
+    else:
+      user_id = row[0]
+    if session_id is not None:
+      # only log to valid session
+      cur.execute('insert into user_game_log (user_id,level_id,score,accuracy,session_id) values (%s,%s,%s,%s,%s)',
+                  [user_id, level_id, score, accuracy, session_id])
+      conn.commit()
+    return jsonify(status="ok")
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
+
 @app.route('/response/<question_id>', methods=["POST"])
 @jwt_required
 def log_question_response(question_id):
@@ -276,16 +316,24 @@ def log_question_response(question_id):
   try:
     answer_option = payload['answer_option']
     correctness = payload['correctness']
-    session_code = payload['session_code']
+    if 'session_code' in payload:
+      session_code = payload['session_code']
+      cur.execute('select id from game_sessions where code=%s', [session_code])
+      session_id = cur.fetchone()[0]
+    else:
+      session_id = None
 
     current_user = get_jwt_identity()
     cur.execute('select id from users where name=%s', [current_user])
     user_id = cur.fetchone()[0]
-    cur.execute('select id from game_sessions where code=%s', [session_code])
-    session_id = cur.fetchone()[0]
 
-    cur.execute('insert into user_question_log (user_id,answer_option,correctness,session_id) values (%s,%s,%s,%s)',
-                [user_id, answer_option, correctness, session_id])
+    if session_id is None:
+      cur.execute('insert into user_question_log (user_id,answer_option,correctness) values (%s,%s,%s)',
+                  [user_id, answer_option, correctness])
+    else:
+      cur.execute('insert into user_question_log (user_id,answer_option,correctness,session_id) values (%s,%s,%s,%s)',
+                  [user_id, answer_option, correctness, session_id])
+
     conn.commit()
 
     return jsonify(status="ok")
@@ -350,6 +398,37 @@ def get_session_leaderboard(session_id):
   finally:
     if cur is not None:
       cur.close()
+
+
+"""
+Link tracking
+"""
+
+@app.route('/tracklink', methods=["POST"])
+@jwt_required
+def track_link():
+  """
+  - passing in the session code, start and end
+  - ensures that the code does not exist before creating a session with those info
+  """
+  payload = request.get_json()
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    url = payload['url']
+    current_user = get_jwt_identity()
+    cur.execute('select id from users where name=%s', [current_user])
+    user_id = cur.fetchone()[0]
+    cur.execute('insert into hyperlink_log (user_id,url) values (%s,%s)', [user_id, url])
+    conn.commit()
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
+  return jsonify(status="ok")
 
 
 if __name__ == '__main__':

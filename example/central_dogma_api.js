@@ -7,6 +7,7 @@
     cdapi.version = '1.0.0';
     const BASE_URL = 'http://localhost:5000';
     //const BASE_URL = '/api';
+    let currentSession = null;
 
     /* Get the session id */
     function get(name) {
@@ -133,14 +134,26 @@
         return await postJSONAuth(BASE_URL + "/game/" + levelId, params);
     };
     cdapi.logQuestionResponse = async (questionId, answerOption, correctness, sessionCode) => {
-        return await postJSONAuth(BASE_URL + "/response/" + questionId,
-                                  {'session_code': sessionCode,
-                                   'correctness': correctness,
-                                   'answer_option': answerOption});
+        if (sessionCode !== null) {
+            return await postJSONAuth(BASE_URL + "/response/" + questionId,
+                                      {'session_code': sessionCode,
+                                       'correctness': correctness,
+                                       'answer_option': answerOption});
+        } else {
+            return await postJSONAuth(BASE_URL + "/response/" + questionId,
+                                      {'correctness': correctness,
+                                       'answer_option': answerOption});
+        }
     };
     cdapi.gameCompletionInfo = async () => {
         return await getAuth(BASE_URL + "/game");
     };
+    cdapi.logHyperlinkVisited = async (url) => {
+        return await postJSONAuth(BASE_URL + "/tracklink", {"url": url});
+    };
+    cdapi.isLoggedIn = function () {
+        return window.localStorage.getItem("loginToken") != null;
+    }
 
     // These lines needed to support a NPM/ES6 environment, the define() call
     // is to support RequireJS
