@@ -70,3 +70,8 @@ cdapi.sessionLeaderboard('session1').then(leaderboard => {
     console.log('session leaderboard');
     console.log(leaderboard);
 });
+
+cdapi.levelGlobalLeaderboard('level1', 'name').then(leaderboard => {
+    console.log('All time leaderboard');
+    console.log(leaderboard);
+});
