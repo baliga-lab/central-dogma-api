@@ -404,12 +404,23 @@ def game_completion():
 Leaderboard functions
 """
 
-@app.route('/leaderboard', methods=["GET"])
+@app.route('/leaderboard', methods=["POST"])
 def get_all_time_leaderboard():
+  payload = request.get_json()
+  try:
+    orderby = payload['orderby']
+  except:
+    orderby = 'score'
+
   conn = dbconn()
   cur = conn.cursor()
   try:
-    cur.execute('select u.name,ugl.score from user_game_log ugl join users u on ugl.user_id=u.id order by ugl.score desc')
+    q = 'select u.name,ugl.score from user_game_log ugl join users u on ugl.user_id=u.id '
+    if orderby == 'name':
+      q += 'order by u.name desc'
+    else:
+      q += 'order by ugl.score desc'
+    cur.execute(q)
     leaders = [{'username': username, 'score': score} for username, score in cur.fetchall()]
     return jsonify(status='ok', entries=leaders)
   except:
@@ -420,12 +431,24 @@ def get_all_time_leaderboard():
       cur.close()
 
 
-@app.route('/leaderboard/<session_id>', methods=["GET"])
+@app.route('/leaderboard/<session_id>', methods=["POST"])
 def get_session_leaderboard(session_id):
+  payload = request.get_json()
+  try:
+    orderby = payload['orderby']
+  except:
+    orderby = 'score'
+
   conn = dbconn()
   cur = conn.cursor()
   try:
-    cur.execute('select u.name,ugl.score from user_game_log ugl join users u on ugl.user_id=u.id join game_sessions s on ugl.session_id=s.id where s.code=%s order by ugl.score desc', [session_id])
+    q = 'select u.name,ugl.score from user_game_log ugl join users u on ugl.user_id=u.id join game_sessions s on ugl.session_id=s.id where s.code=%s '
+    if orderby == 'name':
+      q += 'order by u.name desc'
+    else:
+      q += 'order by ugl.score desc'
+
+    cur.execute(q, [session_id])
     leaders = [{'username': username, 'score': score} for username, score in cur.fetchall()]
     return jsonify(status='ok', entries=leaders)
   except:

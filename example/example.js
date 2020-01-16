@@ -62,7 +62,7 @@ cdapi.login("user", "password").then(result => {
     console.log("can't log in");
 });
 
-cdapi.globalLeaderboard().then(leaderboard => {
+cdapi.globalLeaderboard('name').then(leaderboard => {
     console.log('All time leaderboard');
     console.log(leaderboard);
 });
