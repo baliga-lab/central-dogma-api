@@ -425,7 +425,7 @@ def get_all_time_leaderboard():
     return jsonify(status='ok', entries=leaders)
   except:
     traceback.print_exc()
-    return jsonify(statu='error', error="unknown error")
+    return jsonify(status='error', error="unknown error")
   finally:
     if cur is not None:
       cur.close()
@@ -453,7 +453,7 @@ def get_session_leaderboard(session_id):
     return jsonify(status='ok', entries=leaders)
   except:
     traceback.print_exc()
-    return jsonify(statu='error', error="unknown error")
+    return jsonify(status='error', error="unknown error")
   finally:
     if cur is not None:
       cur.close()
@@ -480,10 +480,39 @@ def global_level_leaderboard(level_id):
     return jsonify(status='ok', entries=leaders)
   except:
     traceback.print_exc()
-    return jsonify(statu='error', error="unknown error")
+    return jsonify(status='error', error="unknown error")
   finally:
     if cur is not None:
       cur.close()
+
+
+@app.route('/level_leaderboard/<session_id>/<level_id>', methods=["POST"])
+def level_session_leaderboard(session_id, level_id):
+  payload = request.get_json()
+  try:
+    orderby = payload['orderby']
+  except:
+    orderby = 'score'
+
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    q = 'select u.name,ugl.score from user_game_log ugl join users u on ugl.user_id=u.id join game_sessions s on ugl.session_id=s.id where s.code=%s and level_id=%s '
+    if orderby == 'name':
+      q += 'order by u.name desc'
+    else:
+      q += 'order by ugl.score desc'
+
+    cur.execute(q, [session_id, level_id])
+    leaders = [{'username': username, 'score': score} for username, score in cur.fetchall()]
+    return jsonify(status='ok', entries=leaders)
+  except:
+    traceback.print_exc()
+    return jsonify(status='error', error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
 
 """
 Link tracking

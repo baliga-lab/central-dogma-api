@@ -137,6 +137,10 @@
         const url = BASE_URL + "/level_leaderboard/" + levelId;
         return await postJSON(url, {orderby: sortby});
     };
+    cdapi.levelSessionLeaderboard = async (sessionId, levelId, sortby) => {
+        const url = BASE_URL + "/level_leaderboard/" + sessionId + '/' + levelId;
+        return await postJSON(url, {orderby: sortby});
+    };
 
     cdapi.sessionInfo = async (sessionId) => {
         return await getAuth(BASE_URL + "/session/" + sessionId);
