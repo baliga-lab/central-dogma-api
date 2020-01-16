@@ -7,12 +7,19 @@
     cdapi.version = '1.0.0';
     const BASE_URL = 'http://localhost:5000';
     //const BASE_URL = '/api';
+    let loggedIn = false;
     let currentSession = null;
 
     /* Get the session id */
     function get(name) {
         if(name=(new RegExp('[?&]'+encodeURIComponent(name)+'=([^&]*)')).exec(location.search))
             return decodeURIComponent(name[1]);
+    }
+
+    function handleError() {
+        let err = {"status": "error", "error": "The API service cannot be reached."};
+        console.log(err);
+        return err;
     }
 
     cdapi.getSessionID = function() {
@@ -23,13 +30,26 @@
     };
 
     cdapi.info = function() {
-        const xhr = new XMLHttpRequest();
         const url = BASE_URL + "/info";
         fetch(url).then(function(response) { return response.json() })
             .then(function(jsonObj) {
                 console.log(jsonObj);
-            });
+            }).catch(handleError);
     };
+
+    function getJSON(url) {
+        return fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+            credentials: 'same-origin', // include, *same-origin, omit
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            redirect: 'follow',
+            referrer: 'no-referrer'
+        }).then(response => response.json()).catch(handleError);
+    }
 
     function postJSON(url, data) {
         return fetch(url, {
@@ -43,7 +63,7 @@
             redirect: 'follow',
             referrer: 'no-referrer',
             body: JSON.stringify(data),
-        }).then(response => response.json());
+        }).then(response => response.json()).catch(handleError);
     }
     function postJSONAuth(url, data) {
         return fetch(url, {
@@ -58,7 +78,7 @@
             redirect: 'follow',
             referrer: 'no-referrer',
             body: JSON.stringify(data),
-        }).then(response => response.json());
+        }).then(response => response.json()).catch(handleError);
     }
     function patchJSONAuth(url, data) {
         return fetch(url, {
@@ -73,12 +93,12 @@
             redirect: 'follow',
             referrer: 'no-referrer',
             body: JSON.stringify(data),
-        }).then(response => response.json());
+        }).then(response => response.json()).catch(handleError);
     }
 
     async function getAuth(url) {
         let headers = {"Authorization": "Bearer " + window.localStorage.getItem("loginToken")};
-        const response = await fetch(url, {headers});
+        const response = await fetch(url, {headers}).catch(handleError);
         return await response.json();
     }
 
@@ -89,6 +109,7 @@
                                "grade": grade, "gender": gender}).then(data => {
                                    if (data.status == "ok") {
                                        window.localStorage.setItem("loginToken", data.access_token);
+                                       loggedIn = true;
                                    }
                                    return data;
                                });
@@ -98,6 +119,7 @@
                               {"username": username, "password": password}).then(data => {
                                   if (data.status == "ok") {
                                       window.localStorage.setItem("loginToken", data.access_token);
+                                      loggedIn = true;
                                   }
                                   return data;
                               });
@@ -105,13 +127,11 @@
 
     cdapi.globalLeaderboard = async () => {
         const url = BASE_URL + "/leaderboard";
-        const response = await fetch(url);
-        return await response.json();
+        return await getJSON(url);
     };
     cdapi.sessionLeaderboard = async (sessionId) => {
         const url = BASE_URL + "/leaderboard/" + sessionId;
-        const response = await fetch(url);
-        return await response.json();
+        return await getJSON(url);
     };
     cdapi.sessionInfo = async (sessionId) => {
         return await getAuth(BASE_URL + "/session/" + sessionId);
@@ -133,6 +153,9 @@
     cdapi.logLevelCompletion = async (levelId, params) => {
         return await postJSONAuth(BASE_URL + "/game/" + levelId, params);
     };
+    cdapi.levelData = async (levelId, params) => {
+        return await postJSONAuth(BASE_URL + "/leveldata/" + levelId, params);
+    };
     cdapi.logQuestionResponse = async (questionId, answerOption, correctness, sessionCode) => {
         if (sessionCode !== null) {
             return await postJSONAuth(BASE_URL + "/response/" + questionId,
@@ -148,13 +171,22 @@
     cdapi.gameCompletionInfo = async () => {
         return await getAuth(BASE_URL + "/game");
     };
+
     cdapi.logHyperlinkVisited = async (url) => {
         return await postJSONAuth(BASE_URL + "/tracklink", {"url": url});
     };
+
     cdapi.isLoggedIn = function () {
-        return window.localStorage.getItem("loginToken") != null;
+        return loggedIn;
     }
 
+    cdapi.getCurrentSession = function () {
+        return currentSession;
+    }
+
+    cdapi.setCurrentSession = function (sess) {
+        currentSession = sess;
+    }
     // These lines needed to support a NPM/ES6 environment, the define() call
     // is to support RequireJS
     glob.cdapi = cdapi;

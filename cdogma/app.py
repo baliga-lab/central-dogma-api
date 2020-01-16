@@ -85,22 +85,20 @@ def login_user():
   payload = request.get_json()
   try:
     username = payload['username']
-    password = payload['password']
+    #password = payload['password']
   except:
-    return jsonify(status="error", error="Please provide a user name and password")
+    return jsonify(status="error", error="Please provide a user name")
 
   conn = dbconn()
   cur = conn.cursor()
   try:
-    cur.execute('select hash, salt from users where name=%s', [username])
+    cur.execute('select id from users where name=%s', [username])
     row = cur.fetchone()
-    if row is not None:
-      hashval, salt = row
-      if users.verify_password(password, salt, hashval):
-        access_token = create_access_token(identity=payload['username'])
-        return jsonify(status="ok", access_token=access_token)
-      else:
-        return jsonify(status="error", error="invalid password")
+    if row is None:
+      cur.execute('insert into users (name) values (%s)', [username])
+      conn.commit()
+    access_token = create_access_token(identity=payload['username'])
+    return jsonify(status="ok", access_token=access_token)
   except:
     traceback.print_exc()
     return jsonify(status="error", error="unknown error")
@@ -257,6 +255,44 @@ def log_level_completion(level_id):
                   [user_id, level_id, score, session_id])
     conn.commit()
     return jsonify(status="ok")
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
+
+@app.route('/leveldata/<level_id>', methods=["POST"])
+@jwt_required
+def level_completion_data(level_id):
+  """passing in the level id, the score, and optional session id
+  submit the level complete and log down the level scores and stuff"""
+  payload = request.get_json()
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    try:
+      session_code = payload['session_code']
+      cur.execute('select id from game_sessions where code=%s', [session_code])
+      session_id = cur.fetchone()[0]
+    except:
+      session_id = None
+    current_user = get_jwt_identity()
+    cur.execute('select id from users where name=%s', [current_user])
+    user_id = cur.fetchone()[0]
+    if session_id is not None:
+      cur.execute('select score from user_game_log where user_id=%s and level_id=%s and session_id=%s',
+                  [user_id, level_id, session_id])
+    else:
+      cur.execute('select score from user_game_log where user_id=%s and session_id is null and level_id=%s',
+                  [user_id, level_id])
+    row = cur.fetchone()
+    if row is not None:
+      result = {'score': row[0]}
+    else:
+      result = {'score': 0}
+    return jsonify(status="ok", result=result)
   except:
     traceback.print_exc()
     return jsonify(status="error", error="unknown error")
