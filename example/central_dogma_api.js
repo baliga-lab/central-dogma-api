@@ -9,6 +9,7 @@
     //const BASE_URL = '/api';
     let loggedIn = false;
     let currentSession = null;
+    var globalObject = null;
 
     /* Get the session id */
     function get(name) {
@@ -196,6 +197,52 @@
     cdapi.setCurrentSession = function (sess) {
         currentSession = sess;
     }
+
+    // ***************************************************************************************
+    // Josh's new functions
+    // ***************************************************************************************
+    cdapi.signin = function(username, sessionID) {
+        console.log('signin, username: ' + username);
+        return new Promise(function(resolve, reject) {
+            loggedIn = true;
+            resolve(true);
+        });
+    };
+    cdapi.signout = function(username, sessionID) {
+        return new Promise(function(resolve, reject) {
+            loggedIn = false;
+            resolve(true);
+        });
+    };
+    cdapi.isUserSignedIn = function(username, sessionID) {
+        return new Promise(function(resolve, reject) {
+            resolve(loggedIn);
+        });
+    };
+    /* Stores a new global object (see above) for the user. */
+    cdapi.storeNewGlobalVariable = function(userName, sessionID, global) {
+        return new Promise(function(resolve, reject) {
+            globalObject = global;
+            resolve(true);
+        });
+    };
+
+    /* Gets a leaderboard based on given parameter for a session. */
+    cdapi.getTotalLeaderboard = function(sessionID, orderBy, numRows) {
+        return new Promise(function(resolve, reject) {
+            var result = [ { userName: 'user1', value: 12345 } ];
+            resolve(result);
+        });
+    };
+
+    /* Gets a leaderboard of scores for a level in a session. */
+    cdapi.getLevelLeaderboard = function(sessionID, level, numRows) {
+        return new Promise(function(resolve, reject) {
+            var result = [ { userName: 'user1', value: 12345 } ];
+            resolve(result);
+        });
+    };
+
     // These lines needed to support a NPM/ES6 environment, the define() call
     // is to support RequireJS
     glob.cdapi = cdapi;

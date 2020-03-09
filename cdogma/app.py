@@ -545,6 +545,79 @@ def track_link():
   return jsonify(status="ok")
 
 
+"""
+NEW JOSH API
+"""
+
+@app.route('/user/signin', methods=["POST"])
+def signin_user():
+  """passing in the username and session id
+  login the user and returns a session token that all other endpoints can use"""
+  payload = request.get_json()
+  try:
+    username = payload['username']
+    session_id = payload['session_id']
+  except:
+    return jsonify(status="error", error="Please provide a user name")
+
+  print("signin_user(), user: %s session: %s" % (username, session_id))
+  conn = dbconn()
+  cur = conn.cursor()
+  try:
+    cur.execute('select id from users where name=%s', [username])
+    row = cur.fetchone()
+    if row is None:
+      cur.execute('insert into users (name) values (%s)', [username])
+      conn.commit()
+    access_token = create_access_token(identity=payload['username'])
+    return jsonify(status="ok", access_token=access_token)
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", error="unknown error")
+  finally:
+    if cur is not None:
+      cur.close()
+
+
+@app.route('/user/storevar', methods=["POST"])
+@jwt_required
+def store_variable():
+  """store global variable"""
+  payload = request.get_json()
+  try:
+    current_user = get_jwt_identity()
+    session_id = payload['session_id']
+    global_var = payload['global']
+    print(global_var)
+    return jsonify(status="ok")
+  except:
+    return jsonify(status="error", error="no parameters")
+
+
+@app.route('/total_leaderboard', methods=["POST"])
+def get_total_leaderboard():
+  payload = request.get_json()
+  try:
+    session_id = payload['session_id']
+    orderby = payload['orderby']
+    num_rows = payload['numrows']
+  except:
+    orderby = 'score'
+
+  result = [ { "userName": 'user1', "value": 12345 } ]
+  return jsonify(status="ok", result=result)
+
+
+@app.route('/level_leaderboard', methods=["POST"])
+def get_level_leaderboard():
+  payload = request.get_json()
+  session_id = payload['session_id']
+  level = payload['level']
+  num_rows = payload['numrows']
+  result = [ { "userName": 'user1', "value": 12345 } ]
+  return jsonify(status="ok", result=result)
+
+
 if __name__ == '__main__':
     app.debug = True
     app.secret_key = 'trststrtsrtgprestnorgp654g'
