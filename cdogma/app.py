@@ -584,19 +584,101 @@ def signin_user():
 def store_variable():
   """store global variable"""
   payload = request.get_json()
+  conn = dbconn()
+  cur = conn.cursor()
   try:
     current_user = get_jwt_identity()
+    cur.execute('select id from users where name=%s', [current_user])
+    user_id = cur.fetchone()[0]
     session_id = payload['session_id']
+    cur.execute('select id from game_sessions where code=%s', [session_id])
+    row = cur.fetchone()
+    if row is not None:
+      session_pk = row[0]
+    else:
+      # TODO: Handle invalid session
+      session_pk = None
+
+    TIME_FORMAT = '%m/%d/%Y, %I:%M:%S %p'
     global_var = payload['global']
+    level_performance = global_var['LEVEL_PERFORMANCE']
+    for lp in level_performance:
+      """{u'levelNum': 1, u'missed': 12, u'level': 1, u'process': u'dna replication', u'timestamp': u'Mon Mar 16 2020 11:02:32 GMT-0700 (Pacific Daylight Time)', u'correct': 3, u'error': 0, u'total': 15, u'speed': 42, u'lvlType': u'dna_replication', u'rotateNT': False}"""
+      print(lp)
+      levelnum = lp['levelNum']
+      missed = lp['missed']
+      level = lp['level']
+      process = lp['process']  # dna replicaion etc
+      timestamp = lp['timestamp']
+      num_correct = lp['correct']
+      num_error = lp['error']
+      num_total = lp['total']
+      speed = lp['speed']
+      level_type = lp['lvlType']
+      rotational = lp['rotateNT']
+      score = lp['score']
+      # '3/16/2020, 4:06:58 PM'
+      finished_at = datetime.datetime.strptime(timestamp, TIME_FORMAT)
+      print(finished_at)
+      cur.execute('select id from level_types where name=%s', [level_type])
+      level_type_id = cur.fetchone()[0]
+      cur.execute('select id from processes where name=%s', [process])
+      process_id = cur.fetchone()[0]
+      cur.execute('insert into levels (finished_at,level,process,level_type,speed,rotational,missed,correct,num_errors,num_total,level_num,session_id,user_id,score) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                  [finished_at, level, process_id, level_type_id, speed, rotational, missed,
+                   num_correct, num_error, num_total, levelnum, session_pk, user_id, score])
+    conn.commit()
+
+    quiz_result = global_var['QUIZ_RESULTS']
+    for qr in quiz_result:
+      timestamp = qr['timestamp']
+      finished_at = datetime.datetime.strptime(timestamp, TIME_FORMAT)
+      score = qr['score']
+      print("finished at: ", finished_at)
+      print("Score: ", score)
+      num_attempts = qr['attempts']
+      q = qr['question']
+      correct_option = q['correct']
+      prompt = q['prompt']
+      qtype = q['type']  # multiple choice or drag and drop
+      worth = q['worth']
+      options = q['options']
+      question_num = qr['questionNum']  # the question ID
+      cur.execute('select id from questions where game_session_id=%s and prompt=%s', [session_pk, prompt])
+      row = cur.fetchone()
+      if row is None:
+        cur.execute('select id from question_types where name=%s', [qtype])
+        qtype_pk = cur.fetchone()[0]
+        cur.execute('insert into questions (question_type,worth,prompt,correct_option,game_session_id) values (%s,%s,%s,%s,%s)',
+                    [qtype_pk, worth, prompt, correct_option, session_pk])
+        question_pk = cur.lastrowid
+        print("insert new question with id: %d !!!!" % question_pk)
+        for index, opt in enumerate(options):
+          cur.execute('insert into question_options (question_id,content,option_num) values (%s,%s,%s)',
+                      [question_pk, opt, index + 1])
+        conn.commit()
+      else:
+        question_pk = row[0]
+        print("question found id: %d !!!" % question_pk)
+
+    # Ignore for now
+    score = global_var['SCORE']
+    active_education = global_var['ACTIVE_EDUCATION']
+    active_effects = global_var['ACTIVE_EFFECTS']
     print(global_var)
     return jsonify(status="ok")
   except:
+    traceback.print_exc()
     return jsonify(status="error", error="no parameters")
+  finally:
+    if cur:
+      cur.close()
 
 
 @app.route('/total_leaderboard', methods=["POST"])
 def get_total_leaderboard():
   payload = request.get_json()
+  num_rows = 10
   try:
     session_id = payload['session_id']
     orderby = payload['orderby']
@@ -604,8 +686,20 @@ def get_total_leaderboard():
   except:
     orderby = 'score'
 
-  result = [ { "userName": 'user1', "value": 12345 } ]
-  return jsonify(status="ok", result=result)
+  conn = dbconn()
+  try:
+    cur = conn.cursor()
+    q = 'select u.name, score from levels l join users u on l.user_id=u.id order by score'
+    cur.execute(q)
+    result = [{"userName": "-".join(uname.split('-')[:3]), "value": score} for uname, score in cur.fetchall()]
+    print(result)
+    #result = [ { "userName": 'user1', "value": 12345 } ]
+    return jsonify(status="ok", result=result)
+  except:
+    traceback.print_exc()
+  finally:
+    if cur is not None:
+      cur.close()
 
 
 @app.route('/level_leaderboard', methods=["POST"])
@@ -614,8 +708,13 @@ def get_level_leaderboard():
   session_id = payload['session_id']
   level = payload['level']
   num_rows = payload['numrows']
-  result = [ { "userName": 'user1', "value": 12345 } ]
-  return jsonify(status="ok", result=result)
+
+  conn = dbconn()
+  with conn.cursor() as cur:
+    cur.execute('select u.name, score from levels l join users u on l.user_id=u.id where level=%s order by score',
+                [level])
+    result = [{"userName": "-".join(uname.split('-')[:3]), "value": score} for uname, score in cur.fetchall()]
+    return jsonify(status="ok", result=result)
 
 
 if __name__ == '__main__':
