@@ -660,6 +660,9 @@ def store_variable():
       else:
         question_pk = row[0]
         print("question found id: %d !!!" % question_pk)
+        cur.execute('insert into quiz_results (answered_at,question_id,attempts,num_questions_asked,score,user_id) values (%s,%s,%s,%s,%s,%s)',
+                  [finished_at, question_pk, num_attempts, question_num, score, user_id])
+      conn.commit()
 
     # Ignore for now
     score = global_var['SCORE']
@@ -679,21 +682,31 @@ def store_variable():
 def get_total_leaderboard():
   payload = request.get_json()
   num_rows = 10
+  session_id = payload['session_id']
   try:
-    session_id = payload['session_id']
+    # orderby should be "levelScore" and "quizScore", support "score", for legacy reasons
     orderby = payload['orderby']
-    num_rows = payload['numrows']
   except:
     orderby = 'score'
 
   conn = dbconn()
   try:
     cur = conn.cursor()
-    q = 'select u.name, score from levels l join users u on l.user_id=u.id order by score'
-    cur.execute(q)
-    result = [{"userName": "-".join(uname.split('-')[:3]), "value": score} for uname, score in cur.fetchall()]
-    print(result)
-    #result = [ { "userName": 'user1', "value": 12345 } ]
+    cur.execute('select id from game_sessions where code=%s', [session_id])
+
+    row = cur.fetchone()
+    if row is not None:
+      session_pk = row[0]
+    else:
+      # TODO: Handle invalid session
+      session_pk = None
+
+    if orderby == 'quizScore':
+      q = 'select u.name as username,sum(score) as quiz_score from quiz_results qr join users u on qr.user_id=u.id join questions q on q.id=qr.question_id where game_session_id=%s group by username,question_id order by quiz_score desc'
+    else:
+      q = 'select u.name,score from levels l join users u on l.user_id=u.id where session_id=%s order by score desc'
+    cur.execute(q, [session_pk])
+    result = [{"userName": "-".join(uname.split('-')[:3]), "value": int(score)} for uname, score in cur.fetchall()]
     return jsonify(status="ok", result=result)
   except:
     traceback.print_exc()
@@ -707,14 +720,34 @@ def get_level_leaderboard():
   payload = request.get_json()
   session_id = payload['session_id']
   level = payload['level']
-  num_rows = payload['numrows']
+  num_rows = 10
+  try:
+    num_rows = payload['numrows']
+  except:
+    pass
 
   conn = dbconn()
-  with conn.cursor() as cur:
-    cur.execute('select u.name, score from levels l join users u on l.user_id=u.id where level=%s order by score',
-                [level])
+  cur = conn.cursor()
+  try:
+    cur.execute('select id from game_sessions where code=%s', [session_id])
+    row = cur.fetchone()
+    if row is not None:
+      session_pk = row[0]
+    else:
+      # TODO: Handle invalid session
+      session_pk = None
+
+    q = 'select u.name, score from levels l join users u on l.user_id=u.id where session_id=%s and level=%s order by score'
+    cur.execute(q, [session_pk, level])
     result = [{"userName": "-".join(uname.split('-')[:3]), "value": score} for uname, score in cur.fetchall()]
     return jsonify(status="ok", result=result)
+  except:
+    traceback.print_exc()
+    return jsonify(status="error", result=[])
+  finally:
+    if cur is not None:
+      cur.close()
+
 
 
 if __name__ == '__main__':
