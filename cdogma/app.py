@@ -554,9 +554,26 @@ def signin_user():
   """passing in the username and session id
   login the user and returns a session token that all other endpoints can use"""
   payload = request.get_json()
+  gender = None
+  state = None
+  grade = None
   try:
     username = payload['username']
     session_id = payload['session_id']
+    userinfo = payload['userinfo']
+    try:
+      gender = userinfo['gender']
+    except:
+      print('no gender provided')
+    try:
+      grade = userinfo['grade']
+    except:
+      print('no grade provided')
+    try:
+      state = userinfo['state']
+    except:
+      print('no state provided')
+
   except:
     return jsonify(status="error", error="Please provide a user name")
 
@@ -567,7 +584,8 @@ def signin_user():
     cur.execute('select id from users where name=%s', [username])
     row = cur.fetchone()
     if row is None:
-      cur.execute('insert into users (name) values (%s)', [username])
+      cur.execute('insert into users (name,gender2,state2,grade2) values (%s,%s,%s,%s)',
+                  [username, gender, state, grade])
       conn.commit()
     access_token = create_access_token(identity=payload['username'])
     return jsonify(status="ok", access_token=access_token)
