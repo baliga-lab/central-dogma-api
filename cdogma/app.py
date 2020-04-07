@@ -614,8 +614,8 @@ def store_variable():
     if row is not None:
       session_pk = row[0]
     else:
-      # TODO: Handle invalid session
-      session_pk = None
+      # use default session if session code not found
+      session_pk = 1
 
     TIME_FORMAT = '%m/%d/%Y, %I:%M:%S %p'
     global_var = payload['global']
@@ -716,8 +716,8 @@ def get_total_leaderboard():
     if row is not None:
       session_pk = row[0]
     else:
-      # TODO: Handle invalid session
-      session_pk = None
+      # Use default session if provided session not found
+      session_pk = 1
 
     if orderby == 'quizScore':
       q = 'select u.name as username,sum(score) as quiz_score from quiz_results qr join users u on qr.user_id=u.id join questions q on q.id=qr.question_id where game_session_id=%s group by username,question_id order by quiz_score desc'
@@ -752,8 +752,8 @@ def get_level_leaderboard():
     if row is not None:
       session_pk = row[0]
     else:
-      # TODO: Handle invalid session
-      session_pk = None
+      # use default session if not found
+      session_pk = 1
 
     q = 'select u.name, score from levels l join users u on l.user_id=u.id where session_id=%s and level=%s order by score'
     cur.execute(q, [session_pk, level])
