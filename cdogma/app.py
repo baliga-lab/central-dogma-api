@@ -608,14 +608,19 @@ def store_variable():
     current_user = get_jwt_identity()
     cur.execute('select id from users where name=%s', [current_user])
     user_id = cur.fetchone()[0]
-    session_id = payload['session_id']
+    session_id = payload['session_id'].strip().lower()
     cur.execute('select id from game_sessions where code=%s', [session_id])
     row = cur.fetchone()
     if row is not None:
       session_pk = row[0]
     else:
-      # use default session if session code not found
-      session_pk = 1
+      if session_id is None or session_id == '':
+        # use default session if session code not found
+        session_pk = 1
+      else:
+        cur.execute('insert into game_sessions (code,start_time,owner_id) values (%s,now(),%s)', [session_id, user_id])
+        session_pk = cur.lastrowid
+        conn.commit()
 
     TIME_FORMAT = '%m/%d/%Y, %I:%M:%S %p'
     global_var = payload['global']
@@ -642,9 +647,12 @@ def store_variable():
       level_type_id = cur.fetchone()[0]
       cur.execute('select id from processes where name=%s', [process])
       process_id = cur.fetchone()[0]
-      cur.execute('insert into levels (finished_at,level,process,level_type,speed,rotational,missed,correct,num_errors,num_total,level_num,session_id,user_id,score) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                  [finished_at, level, process_id, level_type_id, speed, rotational, missed,
-                   num_correct, num_error, num_total, levelnum, session_pk, user_id, score])
+      cur.execute('select count(*) from levels where finished_at=%s and session_id=%s and user_id=%s',
+                  [finished_at, session_pk, user_id])
+      if cur.fetchone()[0] == 0:
+        cur.execute('insert into levels (finished_at,level,process,level_type,speed,rotational,missed,correct,num_errors,num_total,level_num,session_id,user_id,score) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                    [finished_at, level, process_id, level_type_id, speed, rotational, missed,
+                     num_correct, num_error, num_total, levelnum, session_pk, user_id, score])
     conn.commit()
 
     quiz_result = global_var['QUIZ_RESULTS']
@@ -678,8 +686,11 @@ def store_variable():
       else:
         question_pk = row[0]
         print("question found id: %d !!!" % question_pk)
-        cur.execute('insert into quiz_results (answered_at,question_id,attempts,num_questions_asked,score,user_id) values (%s,%s,%s,%s,%s,%s)',
-                  [finished_at, question_pk, num_attempts, question_num, score, user_id])
+        cur.execute('select count(*) from quiz_results where answered_at=%s and question_id=%s and user_id=%s',
+                    [finished_at, question_pk, user_id])
+        if cur.fetchone()[0] == 0:
+          cur.execute('insert into quiz_results (answered_at,question_id,attempts,num_questions_asked,score,user_id) values (%s,%s,%s,%s,%s,%s)',
+                      [finished_at, question_pk, num_attempts, question_num, score, user_id])
       conn.commit()
 
     # Ignore for now
