@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 
 import logging
@@ -730,12 +731,22 @@ def get_total_leaderboard():
       # Use default session if provided session not found
       session_pk = 1
 
+    q = "select count(distinct level_num), user_id from levels where session_id=%s group by session_id, user_id"
+    cur.execute(q, [session_pk])
+    user_levels = defaultdict(int)
+    for num_levels, user_id in cur.fetchall():
+      user_levels[user_id] = num_levels
+
     if orderby == 'quizScore':
       q = 'select u.name as username,sum(score) as quiz_score from quiz_results qr join users u on qr.user_id=u.id join questions q on q.id=qr.question_id where game_session_id=%s group by username,question_id order by quiz_score desc'
     else:
-      q = 'select u.name,score from levels l join users u on l.user_id=u.id where session_id=%s order by score desc'
+      q = 'select u.id, u.name,score from levels l join users u on l.user_id=u.id where session_id=%s order by score desc'
     cur.execute(q, [session_pk])
-    result = [{"userName": "-".join(uname.split('-')[:3]), "value": int(score)} for uname, score in cur.fetchall()]
+    result = [{"userName": "-".join(uname.split('-')[:3]),
+               "value": int(score),
+               "score": int(score),
+               "levels": user_levels[user_id]}
+              for user_id, uname, score in cur.fetchall()]
     return jsonify(status="ok", result=result)
   except:
     traceback.print_exc()
